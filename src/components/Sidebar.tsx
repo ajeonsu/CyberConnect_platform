@@ -1,42 +1,47 @@
-import type { UserRole, ViewMode } from '../types';
+import type { UserRole, UserProfile, SheetTab, Project } from '../types';
 import {
-  LayoutGrid, Monitor, Puzzle, Server,
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronLeft, ChevronRight, LogOut, FolderOpen, ArrowLeft, BarChart3,
+  FileText, Server, ShieldCheck, Monitor, Puzzle, CheckSquare,
+  FlaskConical, Plug, ListTodo, GanttChart, Calendar,
 } from 'lucide-react';
 
 interface Props {
   role: UserRole;
-  viewMode: ViewMode;
-  activePage: 'requirements' | 'screens' | 'features' | 'api';
+  user: UserProfile;
+  activeTabId: string;
+  visibleTabs: SheetTab[];
   collapsed: boolean;
   onToggle: () => void;
-  onPageChange: (page: 'requirements' | 'screens' | 'features' | 'api') => void;
+  onTabChange: (tabId: string) => void;
   onLogout: () => void;
-  requirementCounts: { all: number; screens: number; features: number; api: number };
+  activeProject: Project | null;
+  onBackToProjects: () => void;
+  getTabRowCount: (tabId: string) => number;
+  showAdminDashboard: boolean;
 }
 
-const pages = [
-  { key: 'requirements' as const, label: 'All Requirements', labelJa: '全要件', icon: LayoutGrid, countKey: 'all' as const },
-  { key: 'screens' as const, label: 'Screen List', labelJa: '画面一覧', icon: Monitor, countKey: 'screens' as const },
-  { key: 'features' as const, label: 'Feature List', labelJa: '機能一覧', icon: Puzzle, countKey: 'features' as const },
-  { key: 'api' as const, label: 'API Endpoints', labelJa: 'APIエンドポイント', icon: Server, countKey: 'api' as const },
-];
+const iconMap: Record<string, typeof FileText> = {
+  FileText, Server, ShieldCheck, Monitor, Puzzle, CheckSquare,
+  FlaskConical, Plug, ListTodo, GanttChart, Calendar,
+};
 
-export function Sidebar({ role, viewMode, activePage, collapsed, onToggle, onPageChange, onLogout, requirementCounts }: Props) {
-  const roleColors: Record<UserRole, string> = {
-    admin: 'bg-brand-600',
-    developer: 'bg-emerald-600',
-    client: 'bg-amber-600',
-  };
+const roleColors: Record<UserRole, string> = {
+  administrator: 'bg-red-600',
+  pm: 'bg-brand-600',
+  developer: 'bg-emerald-600',
+  client: 'bg-amber-600',
+};
 
-  const roleLabels: Record<UserRole, string> = {
-    admin: 'Admin',
-    developer: 'Developer',
-    client: 'Guest',
-  };
+const roleLabels: Record<UserRole, string> = {
+  administrator: 'Administrator',
+  pm: 'Project Manager',
+  developer: 'Developer',
+  client: 'Guest',
+};
 
+export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onToggle, onTabChange, onLogout, activeProject, onBackToProjects, getTabRowCount, showAdminDashboard }: Props) {
   return (
-    <div className={`${collapsed ? 'w-16' : 'w-64'} bg-surface-900 border-r border-surface-700 flex flex-col transition-all duration-200 shrink-0`}>
+    <div className={`${collapsed ? 'w-16' : 'w-60'} bg-surface-900 border-r border-surface-700 flex flex-col transition-all duration-200 shrink-0`}>
       <div className="p-4 flex items-center gap-3 border-b border-surface-700">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shrink-0">
           <span className="text-white font-bold text-sm">C</span>
@@ -44,7 +49,7 @@ export function Sidebar({ role, viewMode, activePage, collapsed, onToggle, onPag
         {!collapsed && (
           <div className="min-w-0">
             <h2 className="text-white font-semibold text-sm truncate">CyberConnect</h2>
-            <p className="text-gray-500 text-xs truncate">Platform Demo</p>
+            <p className="text-gray-500 text-xs truncate">Platform</p>
           </div>
         )}
         <button onClick={onToggle} className="ml-auto text-gray-500 hover:text-gray-300 transition-colors shrink-0">
@@ -53,51 +58,110 @@ export function Sidebar({ role, viewMode, activePage, collapsed, onToggle, onPag
       </div>
 
       {!collapsed && (
-        <div className="px-4 py-3 border-b border-surface-700">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${roleColors[role]}`} />
-            <span className="text-gray-400 text-xs">{roleLabels[role]}</span>
-            {viewMode === 'client' && (
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                Client View
+        <div className="px-4 py-2.5 border-b border-surface-700">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-6 h-6 rounded-full ${roleColors[role]} flex items-center justify-center shrink-0`}>
+              <span className="text-white text-[9px] font-bold">{user.name.charAt(0).toUpperCase()}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-300 text-xs font-medium truncate">{user.name}</p>
+              <p className="text-gray-600 text-[10px] truncate">{roleLabels[role]}</p>
+            </div>
+            {role === 'client' && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                View Only
               </span>
             )}
           </div>
         </div>
       )}
 
-      <nav className="flex-1 p-2 space-y-0.5">
-        {pages.map(({ key, label, labelJa, icon: Icon, countKey }) => {
-          if (key === 'api' && role === 'client') return null;
-          const isActive = activePage === key;
-          return (
-            <button
-              key={key}
-              onClick={() => onPageChange(key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                isActive
-                  ? 'bg-brand-600/15 text-brand-300'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
-              }`}
-              title={collapsed ? label : undefined}
-            >
-              <Icon className={`w-4.5 h-4.5 shrink-0 ${isActive ? 'text-brand-400' : ''}`} />
-              {!collapsed && (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium truncate">{label}</div>
-                    <div className="text-xs text-gray-500 truncate">{labelJa}</div>
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    isActive ? 'bg-brand-500/20 text-brand-300' : 'bg-surface-800 text-gray-500'
-                  }`}>
-                    {requirementCounts[countKey]}
-                  </span>
-                </>
-              )}
-            </button>
-          );
-        })}
+      {activeProject && !collapsed && (
+        <div className="px-2 pt-2">
+          <button
+            onClick={onBackToProjects}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all bg-surface-800 border border-surface-700 hover:border-brand-500/30 group"
+          >
+            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${activeProject.color} flex items-center justify-center shrink-0`}>
+              <FolderOpen className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] text-gray-500">Project</div>
+              <div className="text-xs font-medium text-white truncate">{activeProject.name}</div>
+            </div>
+            <ArrowLeft className="w-3.5 h-3.5 text-gray-600 group-hover:text-brand-400 transition-colors" />
+          </button>
+        </div>
+      )}
+
+      {activeProject && collapsed && (
+        <div className="px-2 pt-2">
+          <button
+            onClick={onBackToProjects}
+            className={`w-full flex items-center justify-center p-2.5 rounded-lg bg-gradient-to-br ${activeProject.color} hover:opacity-80 transition-opacity`}
+            title={activeProject.name}
+          >
+            <FolderOpen className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      )}
+
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+        {showAdminDashboard && !collapsed && (
+          <div className="px-3 py-3 mb-2 rounded-lg bg-brand-600/10 border border-brand-500/20">
+            <div className="flex items-center gap-2 text-brand-300 text-xs font-medium">
+              <BarChart3 className="w-4 h-4" />
+              Admin Dashboard
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">Viewing all PM projects</p>
+          </div>
+        )}
+
+        {activeProject ? (
+          visibleTabs.map(tab => {
+            const Icon = iconMap[tab.icon] ?? FileText;
+            const isActive = activeTabId === tab.id;
+            const count = tab.isSpecialView ? null : getTabRowCount(tab.id);
+
+            return (
+              <button
+                key={tab.id}
+                onClick={() => onTabChange(tab.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all ${
+                  isActive
+                    ? 'bg-brand-600/15 text-brand-300'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-surface-800'
+                }`}
+                title={collapsed ? tab.name : undefined}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-brand-400' : ''}`} />
+                {!collapsed && (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium truncate">{tab.name}</div>
+                      <div className="text-[10px] text-gray-600 truncate">{tab.nameJa}</div>
+                    </div>
+                    {count !== null && count > 0 && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                        isActive ? 'bg-brand-500/20 text-brand-300' : 'bg-surface-800 text-gray-500'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            );
+          })
+        ) : !collapsed ? (
+          <div className="px-3 py-8 text-center">
+            <FolderOpen className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+            <p className="text-gray-500 text-sm">
+              {showAdminDashboard ? 'Click a project above' : 'Select a project'}
+            </p>
+            <p className="text-gray-600 text-xs mt-0.5">プロジェクトを選択</p>
+          </div>
+        ) : null}
       </nav>
 
       <div className="p-2 border-t border-surface-700">
@@ -106,8 +170,8 @@ export function Sidebar({ role, viewMode, activePage, collapsed, onToggle, onPag
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
           title={collapsed ? 'Logout' : undefined}
         >
-          <LogOut className="w-4.5 h-4.5 shrink-0" />
-          {!collapsed && <span className="text-sm">Switch Role</span>}
+          <LogOut className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="text-xs">Switch Role</span>}
         </button>
       </div>
     </div>

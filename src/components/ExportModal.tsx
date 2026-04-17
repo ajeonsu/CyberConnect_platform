@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import type { ViewMode, Requirement } from '../types';
+import type { SheetTab, SheetRow } from '../types';
 import { X, FileText, Table, Download, Check } from 'lucide-react';
 
 interface Props {
-  viewMode: ViewMode;
+  tab: SheetTab;
+  rows: SheetRow[];
   onClose: () => void;
-  requirements: Requirement[];
 }
 
-export function ExportModal({ viewMode, onClose, requirements }: Props) {
+export function ExportModal({ tab, rows, onClose }: Props) {
   const [format, setFormat] = useState<'pdf' | 'csv'>('csv');
-  const [includeTranslations, setIncludeTranslations] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exported, setExported] = useState(false);
 
@@ -18,15 +17,10 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
     setExporting(true);
 
     if (format === 'csv') {
-      const headers = ['Code', 'Category', 'Title (EN)', 'Title (JA)', 'Description (EN)', 'Description (JA)', 'Internal Notes (EN)', 'Internal Notes (JA)', 'Tech Spec (EN)', 'Tech Spec (JA)', 'Status', 'Priority', 'Updated'];
-      const rows = requirements.map(r => [
-        r.code, r.category, r.title.en, r.title.ja, r.description.en, r.description.ja,
-        r.internalNotes.en, r.internalNotes.ja, r.techSpec.en, r.techSpec.ja,
-        r.status, r.priority, r.updatedAt,
-      ]);
-
+      const headers = tab.columns.map(c => c.label);
+      const csvRows = rows.map(r => tab.columns.map(c => r[c.key] ?? ''));
       const bom = '\uFEFF';
-      const csvContent = bom + [headers, ...rows].map(row =>
+      const csvContent = bom + [headers, ...csvRows].map(row =>
         row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
       ).join('\n');
 
@@ -34,7 +28,7 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `requirements_${viewMode}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `${tab.id}_${new Date().toISOString().split('T')[0]}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     }
@@ -51,8 +45,8 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
       <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-md p-6 animate-fade-in shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-white">Export Data</h2>
-            <p className="text-xs text-gray-500 mt-0.5">データのエクスポート</p>
+            <h2 className="text-lg font-semibold text-white">Export: {tab.name}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{tab.nameJa}のエクスポート</p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-surface-800">
             <X className="w-5 h-5" />
@@ -66,9 +60,7 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
               <button
                 onClick={() => setFormat('csv')}
                 className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                  format === 'csv'
-                    ? 'border-brand-500 bg-brand-500/10 text-brand-300'
-                    : 'border-surface-700 text-gray-400 hover:border-surface-200'
+                  format === 'csv' ? 'border-brand-500 bg-brand-500/10 text-brand-300' : 'border-surface-700 text-gray-400 hover:border-surface-200'
                 }`}
               >
                 <Table className="w-5 h-5" />
@@ -80,9 +72,7 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
               <button
                 onClick={() => setFormat('pdf')}
                 className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                  format === 'pdf'
-                    ? 'border-brand-500 bg-brand-500/10 text-brand-300'
-                    : 'border-surface-700 text-gray-400 hover:border-surface-200'
+                  format === 'pdf' ? 'border-brand-500 bg-brand-500/10 text-brand-300' : 'border-surface-700 text-gray-400 hover:border-surface-200'
                 }`}
               >
                 <FileText className="w-5 h-5" />
@@ -94,34 +84,13 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
             </div>
           </div>
 
-          <div className="bg-surface-800 rounded-xl p-4 border border-surface-700 space-y-3">
+          <div className="bg-surface-800 rounded-xl p-4 border border-surface-700">
             <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm text-gray-300">View / ビュー</span>
-                <p className="text-xs text-gray-500 mt-0.5">{viewMode === 'internal' ? 'Internal (all columns)' : 'Client (filtered columns)'}</p>
-              </div>
-              <span className={`text-xs px-2 py-1 rounded-full ${
-                viewMode === 'internal' ? 'bg-brand-500/10 text-brand-300' : 'bg-amber-500/10 text-amber-300'
-              }`}>
-                {viewMode === 'internal' ? 'Internal' : 'Client'}
-              </span>
+              <span className="text-sm text-gray-300">Columns</span>
+              <span className="text-xs text-gray-500">{tab.columns.length} columns</span>
             </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-sm text-gray-300">Include translations</span>
-                <p className="text-xs text-gray-500 mt-0.5">Both EN and JA columns</p>
-              </div>
-              <button
-                onClick={() => setIncludeTranslations(!includeTranslations)}
-                className={`w-10 h-6 rounded-full transition-colors relative ${includeTranslations ? 'bg-brand-600' : 'bg-surface-700'}`}
-              >
-                <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${includeTranslations ? 'left-5' : 'left-1'}`} />
-              </button>
-            </div>
-
-            <div className="pt-2 border-t border-surface-700">
-              <span className="text-xs text-gray-500">{requirements.length} rows will be exported</span>
+            <div className="pt-2 mt-2 border-t border-surface-700">
+              <span className="text-xs text-gray-500">{rows.length} rows will be exported</span>
             </div>
           </div>
 
@@ -129,23 +98,15 @@ export function ExportModal({ viewMode, onClose, requirements }: Props) {
             onClick={handleExport}
             disabled={exporting}
             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium text-sm transition-all ${
-              exported
-                ? 'bg-emerald-600 text-white'
-                : 'bg-brand-600 hover:bg-brand-500 text-white'
+              exported ? 'bg-emerald-600 text-white' : 'bg-brand-600 hover:bg-brand-500 text-white'
             } disabled:opacity-50`}
           >
             {exported ? (
-              <>
-                <Check className="w-4 h-4" />
-                Exported Successfully!
-              </>
+              <><Check className="w-4 h-4" /> Exported Successfully!</>
             ) : exporting ? (
               'Exporting...'
             ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Export {format.toUpperCase()} / {format.toUpperCase()}をエクスポート
-              </>
+              <><Download className="w-4 h-4" /> Export {format.toUpperCase()}</>
             )}
           </button>
         </div>

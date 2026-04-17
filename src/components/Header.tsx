@@ -1,37 +1,28 @@
-import type { UserRole, ViewMode } from '../types';
-import {
-  Plus, Download, Eye, BookOpen,
-  Search,
-} from 'lucide-react';
+import type { UserRole, UserProfile, SheetTab } from '../types';
+import { Download, Search } from 'lucide-react';
 import { useState } from 'react';
 
 interface Props {
   role: UserRole;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  onExport: () => void;
-  onAddRow: () => void;
-  activePage: string;
+  user: UserProfile;
+  tab: SheetTab;
   totalRows: number;
+  projectName?: string;
+  onExport: () => void;
 }
 
-const pageTitles: Record<string, { en: string; ja: string }> = {
-  requirements: { en: 'All Requirements', ja: '全要件一覧' },
-  screens: { en: 'Screen List', ja: '画面一覧' },
-  features: { en: 'Feature List', ja: '機能一覧' },
-  api: { en: 'API Endpoints', ja: 'APIエンドポイント一覧' },
-};
-
-export function Header({ role, viewMode, onViewModeChange, onExport, onAddRow, activePage, totalRows }: Props) {
+export function Header({ role, tab, totalRows, projectName, onExport }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
-  const title = pageTitles[activePage] || pageTitles.requirements;
 
   return (
     <header className="bg-surface-900 border-b border-surface-700 px-6 py-3">
       <div className="flex items-center gap-4">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-white truncate">{title.en}</h1>
-          <p className="text-xs text-gray-500">{title.ja} &middot; {totalRows} items</p>
+          <h1 className="text-lg font-semibold text-white truncate">{tab.name}</h1>
+          <p className="text-xs text-gray-500">
+            {projectName && <><span className="text-gray-400">{projectName}</span> &middot; </>}
+            {tab.nameJa} &middot; {totalRows} items
+          </p>
         </div>
 
         <div className="flex-1 max-w-sm mx-4">
@@ -48,31 +39,10 @@ export function Header({ role, viewMode, onViewModeChange, onExport, onAddRow, a
         </div>
 
         <div className="flex items-center gap-2">
-          {role !== 'client' && (
-            <div className="flex items-center bg-surface-800 rounded-lg p-0.5 border border-surface-700">
-              <button
-                onClick={() => onViewModeChange('internal')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === 'internal'
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                Internal
-              </button>
-              <button
-                onClick={() => onViewModeChange('client')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                  viewMode === 'client'
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Client
-              </button>
-            </div>
+          {role === 'client' && tab.guestEditableColumns.length > 0 && (
+            <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              Remark editable
+            </span>
           )}
 
           <button
@@ -82,16 +52,6 @@ export function Header({ role, viewMode, onViewModeChange, onExport, onAddRow, a
             <Download className="w-3.5 h-3.5" />
             Export
           </button>
-
-          {role !== 'client' && (
-            <button
-              onClick={onAddRow}
-              className="flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-medium transition-all shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Row
-            </button>
-          )}
         </div>
       </div>
     </header>

@@ -1,50 +1,58 @@
-export type UserRole = 'admin' | 'developer' | 'client';
+export type UserRole = 'administrator' | 'pm' | 'developer' | 'client';
 
-export type ViewMode = 'internal' | 'client';
-
-export type SyncStatus = 'synced' | 'pending' | 'translating' | 'conflict';
-
-export interface BilingualText {
-  en: string;
-  ja: string;
-  syncStatus: SyncStatus;
-  lastEditedLang: 'en' | 'ja';
-}
-
-export interface Requirement {
+export interface UserProfile {
   id: string;
-  code: string;
-  category: string;
-  title: BilingualText;
-  description: BilingualText;
-  status: 'draft' | 'review' | 'approved' | 'in_progress' | 'completed';
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  assignee: string;
-  internalNotes: BilingualText;
-  techSpec: BilingualText;
-  apiEndpoint: string;
-  clientVisible: boolean;
-  clientEditable: boolean;
-  createdAt: string;
-  updatedAt: string;
-  attachments: number;
-  comments: number;
+  name: string;
+  email: string;
+  role: UserRole;
 }
 
-export interface Column {
-  key: keyof Requirement | 'title_en' | 'title_ja' | 'description_en' | 'description_ja' | 'internalNotes_en' | 'internalNotes_ja' | 'techSpec_en' | 'techSpec_ja';
+export interface SheetTab {
+  id: string;
+  name: string;
+  nameJa: string;
+  icon: string;
+  visibleTo: UserRole[];
+  columns: SheetColumn[];
+  guestEditableColumns: string[];
+  pmCanAddRows: boolean;
+  isSpecialView?: boolean;
+}
+
+export interface SheetColumn {
+  key: string;
   label: string;
   labelJa: string;
   width: number;
-  internalOnly: boolean;
+  type: 'text' | 'status' | 'select' | 'date' | 'number' | 'code' | 'assignee' | 'longtext';
   editable: boolean;
-  clientEditable: boolean;
-  type: 'text' | 'status' | 'priority' | 'code' | 'bilingual' | 'boolean' | 'date' | 'number';
+  options?: string[];
+}
+
+export interface SheetRow {
+  id: string;
+  [key: string]: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  nameJa: string;
+  client: string;
+  pmId: string;
+  assignedDevIds: string[];
+  clientId: string;
+  description: string;
+  descriptionJa: string;
+  color: string;
+  status: 'active' | 'completed' | 'on_hold';
+  createdAt: string;
+  background?: string;
+  purpose?: string;
+  devPeriod?: string;
 }
 
 export interface ExportOptions {
   format: 'pdf' | 'csv';
-  view: ViewMode;
-  includeTranslations: boolean;
   columns: string[];
 }
