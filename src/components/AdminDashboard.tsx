@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import type { Project, SheetRow, UserProfile } from '../types';
+import type { Project, SheetRow } from '../types';
 import { FolderOpen, CheckCircle, Clock, Pause, Users, ListChecks, AlertTriangle, Plus, X, ChevronDown } from 'lucide-react';
-import { getUserName, getAssignableTeamProfiles, resolveDemoGmailUser } from '../data';
+import { getUserName, getProfilesByRole, getAssignableTeamProfiles, resolveDemoGmailUser } from '../data';
 
 interface Props {
   projects: Project[];
@@ -26,7 +26,8 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingPm, setEditingPm] = useState<string | null>(null);
   const [editingDevs, setEditingDevs] = useState<string | null>(null);
-  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [editingClient, setEditingClient] = useState<string | null>(null);
+  const [inviteFor, setInviteFor] = useState<{ projectId: string; role: 'pm' | 'developer' | 'client' } | null>(null);
   const [showDeleteConfirmFor, setShowDeleteConfirmFor] = useState<string | null>(null);
 
   const assignableTeam = getAssignableTeamProfiles();
@@ -95,7 +96,6 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {pmProjects.map(project => {
                 const stats = getTaskStats(project.id);
-                const hasProjectManager = Boolean(project.pmId?.trim());
                 const progress = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                 const StatusIcon = project.status === 'active' ? CheckCircle : project.status === 'on_hold' ? Pause : Clock;
                 const statusColor = project.status === 'active' ? 'text-emerald-400' : project.status === 'on_hold' ? 'text-amber-400' : 'text-brand-400';
@@ -145,6 +145,7 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                             autoFocus
                             className="bg-surface-800 border border-brand-500 rounded px-2 py-1 text-xs text-white focus:outline-none"
                           >
+                            <option value="">None</option>
                             {assignableTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                           </select>
                         ) : (
@@ -152,9 +153,7 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                             <button onClick={() => setEditingPm(project.id)} className="text-xs text-gray-300 hover:text-brand-300 transition-colors flex items-center gap-1">
                               {getUserName(project.pmId)} <ChevronDown className="w-3 h-3 text-gray-600" />
                             </button>
-                            {!hasProjectManager && (
-                              <button onClick={() => setInviteFor(project.id)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
-                            )}
+                            <button onClick={() => setInviteFor({ projectId: project.id, role: 'pm' })} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
                           </div>
                         )}
                       </div>
@@ -198,7 +197,30 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                               }
                               <ChevronDown className="w-3 h-3 text-gray-600" />
                             </button>
-                            <button onClick={() => setInviteFor(project.id)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
+                            <button onClick={() => setInviteFor({ projectId: project.id, role: 'developer' })} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider" title="Assign a client user">Client</span>
+                        {editingClient === project.id ? (
+                          <select
+                            value={project.clientId}
+                            onChange={e => { onUpdateProject(project.id, { clientId: e.target.value }); setEditingClient(null); }}
+                            onBlur={() => setEditingClient(null)}
+                            autoFocus
+                            className="bg-surface-800 border border-brand-500 rounded px-2 py-1 text-xs text-white focus:outline-none"
+                          >
+                            <option value="">None</option>
+                            {getProfilesByRole('client').map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setEditingClient(project.id)} className="text-xs text-gray-300 hover:text-brand-300 transition-colors flex items-center gap-1">
+                              {getUserName(project.clientId)} <ChevronDown className="w-3 h-3 text-gray-600" />
+                            </button>
+                            <button onClick={() => setInviteFor({ projectId: project.id, role: 'client' })} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
                           </div>
                         )}
                       </div>
@@ -216,7 +238,6 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
 
         {showNewProject && (
           <NewProjectModal
-            assignableTeam={assignableTeam}
             existingCount={projects.length}
             onClose={() => setShowNewProject(false)}
             onAdd={(p) => { onAddProject(p); setShowNewProject(false); }}
@@ -225,6 +246,7 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
         
         {inviteFor && (
           <InviteModal
+            initialRole={inviteFor.role}
             onClose={() => setInviteFor(null)}
             onInvite={(emails, role) => {
               // simple invite: map demo gmail to user ids and update project assignments
@@ -239,11 +261,11 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                 else if (role === 'client') updates.clientId = u.id;
               }
               if (addDevIds.length > 0) {
-                const proj = projects.find(p => p.id === inviteFor);
+                const proj = projects.find(p => p.id === inviteFor.projectId);
                 const merged = Array.from(new Set([...(proj?.assignedDevIds ?? []), ...addDevIds]));
                 updates.assignedDevIds = merged;
               }
-              onUpdateProject(inviteFor, updates);
+              onUpdateProject(inviteFor.projectId, updates);
               setInviteFor(null);
             }}
           />
@@ -283,8 +305,7 @@ function StatCard({ icon: Icon, label, labelJa, value, color }: {
   );
 }
 
-function NewProjectModal({ assignableTeam, existingCount, onClose, onAdd }: {
-  assignableTeam: UserProfile[];
+function NewProjectModal({ existingCount, onClose, onAdd }: {
   existingCount: number;
   onClose: () => void;
   onAdd: (p: Project) => void;
@@ -292,7 +313,6 @@ function NewProjectModal({ assignableTeam, existingCount, onClose, onAdd }: {
   const [name, setName] = useState('');
   const [nameJa, setNameJa] = useState('');
   const [client, setClient] = useState('');
-  const defaultPmId = assignableTeam.find(u => u.role === 'pm')?.id ?? assignableTeam[0]?.id ?? '';
   const [desc, setDesc] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -304,7 +324,7 @@ function NewProjectModal({ assignableTeam, existingCount, onClose, onAdd }: {
       name: name.trim(),
       nameJa: nameJa.trim() || name.trim(),
       client: client.trim() || 'TBD',
-      pmId: defaultPmId,
+      pmId: '',
       assignedDevIds: [],
       clientId: '',
       description: desc.trim(),
@@ -367,9 +387,9 @@ function NewProjectModal({ assignableTeam, existingCount, onClose, onAdd }: {
   );
 }
 
-function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (emails: string, role: 'pm' | 'developer' | 'client') => void }) {
+function InviteModal({ initialRole, onClose, onInvite }: { initialRole?: 'pm' | 'developer' | 'client'; onClose: () => void; onInvite: (emails: string, role: 'pm' | 'developer' | 'client') => void }) {
   const [emails, setEmails] = useState('');
-  const [role, setRole] = useState<'pm' | 'developer' | 'client'>('developer');
+  const [role, setRole] = useState<'pm' | 'developer' | 'client'>(initialRole || 'developer');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-md p-6 animate-fade-in shadow-2xl" onClick={e => e.stopPropagation()}>

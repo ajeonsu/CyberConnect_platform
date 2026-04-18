@@ -572,6 +572,7 @@ export function setPersonalNameResolver(resolver: ((userId: string) => string | 
 }
 
 export function getUserName(userId: string): string {
+  if (!userId) return 'None';
   const fromProfiles = userProfiles.find(u => u.id === userId)?.name;
   if (fromProfiles) return fromProfiles;
   if (personalNameResolver) {

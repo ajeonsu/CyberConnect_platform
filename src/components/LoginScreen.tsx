@@ -347,14 +347,9 @@ export function LoginScreen({ onLogin }: Props) {
         {flow === 'team_role' && (
           <div className="animate-fade-in">
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={handleBackTeam} className="text-gray-500 hover:text-white p-2 rounded-lg hover:bg-surface-800">
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-                <p className="text-gray-400">
-                  {gateUser ? `Signed in as ${gateUser.name}. Choose a role for this session.` : 'Select a role to explore the platform'}
-                </p>
-              </div>
+              <p className="text-gray-400">
+                {gateUser ? `Signed in as ${gateUser.name}. Choose a role for this session.` : 'Select a role to explore the platform'}
+              </p>
               <button type="button" onClick={resetToSignin} className="flex items-center gap-2 px-3 py-2 bg-surface-800 border border-surface-700 rounded-lg text-gray-300 hover:text-white hover:border-surface-200 text-sm font-medium transition-all">
                 <LogOut className="w-4 h-4" />
                 Logout
