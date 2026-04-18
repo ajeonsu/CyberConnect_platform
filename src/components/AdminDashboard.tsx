@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Project, SheetRow, UserProfile } from '../types';
 import { FolderOpen, CheckCircle, Clock, Pause, Users, ListChecks, AlertTriangle, Plus, X, ChevronDown } from 'lucide-react';
-import { getUserName, getProfilesByRole, getAssignableTeamProfiles, resolveDemoGmailUser } from '../data';
+import { getUserName, getAssignableTeamProfiles, resolveDemoGmailUser } from '../data';
 
 interface Props {
   projects: Project[];
@@ -30,7 +30,6 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
   const [showDeleteConfirmFor, setShowDeleteConfirmFor] = useState<string | null>(null);
 
   const assignableTeam = getAssignableTeamProfiles();
-  const clientProfiles = getProfilesByRole('client');
 
   const pmGroups = new Map<string, Project[]>();
   for (const p of projects) {
@@ -218,7 +217,6 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
         {showNewProject && (
           <NewProjectModal
             assignableTeam={assignableTeam}
-            clientProfiles={clientProfiles}
             existingCount={projects.length}
             onClose={() => setShowNewProject(false)}
             onAdd={(p) => { onAddProject(p); setShowNewProject(false); }}
@@ -227,7 +225,6 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
         
         {inviteFor && (
           <InviteModal
-            projectId={inviteFor}
             onClose={() => setInviteFor(null)}
             onInvite={(emails, role) => {
               // simple invite: map demo gmail to user ids and update project assignments
@@ -286,9 +283,8 @@ function StatCard({ icon: Icon, label, labelJa, value, color }: {
   );
 }
 
-function NewProjectModal({ assignableTeam, clientProfiles, existingCount, onClose, onAdd }: {
+function NewProjectModal({ assignableTeam, existingCount, onClose, onAdd }: {
   assignableTeam: UserProfile[];
-  clientProfiles: { id: string; name: string }[];
   existingCount: number;
   onClose: () => void;
   onAdd: (p: Project) => void;
@@ -371,7 +367,7 @@ function NewProjectModal({ assignableTeam, clientProfiles, existingCount, onClos
   );
 }
 
-function InviteModal({ projectId, onClose, onInvite }: { projectId: string; onClose: () => void; onInvite: (emails: string, role: 'pm' | 'developer' | 'client') => void }) {
+function InviteModal({ onClose, onInvite }: { onClose: () => void; onInvite: (emails: string, role: 'pm' | 'developer' | 'client') => void }) {
   const [emails, setEmails] = useState('');
   const [role, setRole] = useState<'pm' | 'developer' | 'client'>('developer');
   return (
