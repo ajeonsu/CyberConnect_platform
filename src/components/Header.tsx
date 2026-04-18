@@ -1,6 +1,7 @@
 import type { UserRole, UserProfile, SheetTab } from '../types';
-import { Download, Search } from 'lucide-react';
+import { Download, Search, Languages } from 'lucide-react';
 import { useState } from 'react';
+import type { Language } from '../data';
 
 interface Props {
   role: UserRole;
@@ -8,20 +9,26 @@ interface Props {
   tab: SheetTab;
   totalRows: number;
   projectName?: string;
+  language: Language;
+  onLanguageChange: (lang: Language) => void;
   onExport: () => void;
 }
 
-export function Header({ role, tab, totalRows, projectName, onExport }: Props) {
+export function Header({ role, tab, totalRows, projectName, language, onLanguageChange, onExport }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  const toggleLanguage = () => {
+    onLanguageChange(language === 'en' ? 'ja' : 'en');
+  };
 
   return (
     <header className="bg-surface-900 border-b border-surface-700 px-6 py-3">
       <div className="flex items-center gap-4">
         <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-white truncate">{tab.name}</h1>
+          <h1 className="text-lg font-semibold text-white truncate">{language === 'ja' ? tab.nameJa : tab.name}</h1>
           <p className="text-xs text-gray-500">
             {projectName && <><span className="text-gray-400">{projectName}</span> &middot; </>}
-            {tab.nameJa} &middot; {totalRows} items
+            {language === 'en' ? tab.nameJa : tab.name} &middot; {totalRows} items
           </p>
         </div>
 
@@ -44,6 +51,15 @@ export function Header({ role, tab, totalRows, projectName, onExport }: Props) {
               Remark editable
             </span>
           )}
+
+          <button
+            onClick={toggleLanguage}
+            className="flex items-center gap-1.5 px-3 py-2 bg-surface-800 border border-surface-700 rounded-lg text-gray-300 hover:text-white hover:border-surface-200 text-xs font-medium transition-all"
+            title={language === 'en' ? 'Switch to Japanese' : '英語に切り替え'}
+          >
+            <Languages className="w-3.5 h-3.5" />
+            {language === 'en' ? 'EN' : 'JP'}
+          </button>
 
           <button
             onClick={onExport}

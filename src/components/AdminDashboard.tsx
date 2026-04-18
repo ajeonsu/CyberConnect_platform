@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import type { Project, SheetRow } from '../types';
+import type { Project, SheetRow, UserProfile } from '../types';
 import { FolderOpen, CheckCircle, Clock, Pause, Users, ListChecks, AlertTriangle, Plus, X, ChevronDown } from 'lucide-react';
-import { getUserName, getProfilesByRole } from '../data';
+import { getUserName, getProfilesByRole, getAssignableTeamProfiles, resolveDemoGmailUser } from '../data';
 
 interface Props {
   projects: Project[];
@@ -9,6 +9,7 @@ interface Props {
   onSelectProject: (projectId: string) => void;
   onUpdateProject: (projectId: string, updates: Partial<Project>) => void;
   onAddProject: (project: Project) => void;
+  onDeleteProject?: (projectId: string) => void;
 }
 
 const PROJECT_COLORS = [
@@ -20,13 +21,15 @@ const PROJECT_COLORS = [
   'from-cyan-500 to-cyan-700',
 ];
 
-export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpdateProject, onAddProject }: Props) {
+export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpdateProject, onAddProject, onDeleteProject }: Props) {
+  // Note: onDeleteProject is forwarded via window event or can be passed in Props in future
   const [showNewProject, setShowNewProject] = useState(false);
   const [editingPm, setEditingPm] = useState<string | null>(null);
   const [editingDevs, setEditingDevs] = useState<string | null>(null);
+  const [inviteFor, setInviteFor] = useState<string | null>(null);
+  const [showDeleteConfirmFor, setShowDeleteConfirmFor] = useState<string | null>(null);
 
-  const pmProfiles = getProfilesByRole('pm');
-  const devProfiles = getProfilesByRole('developer');
+  const assignableTeam = getAssignableTeamProfiles();
   const clientProfiles = getProfilesByRole('client');
 
   const pmGroups = new Map<string, Project[]>();
@@ -90,9 +93,10 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {pmProjects.map(project => {
                 const stats = getTaskStats(project.id);
+                const hasProjectManager = Boolean(project.pmId?.trim());
                 const progress = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
                 const StatusIcon = project.status === 'active' ? CheckCircle : project.status === 'on_hold' ? Pause : Clock;
                 const statusColor = project.status === 'active' ? 'text-emerald-400' : project.status === 'on_hold' ? 'text-amber-400' : 'text-brand-400';
@@ -131,9 +135,9 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                       {stats.blocked > 0 && <span className="flex items-center gap-1 text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />{stats.blocked} blocked</span>}
                     </div>
 
-                    <div className="pt-3 border-t border-surface-700 space-y-2">
+                      <div className="pt-3 border-t border-surface-700 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">PM</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider" title="Any PM or developer account">PM</span>
                         {editingPm === project.id ? (
                           <select
                             value={project.pmId}
@@ -142,35 +146,43 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                             autoFocus
                             className="bg-surface-800 border border-brand-500 rounded px-2 py-1 text-xs text-white focus:outline-none"
                           >
-                            {pmProfiles.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
+                            {assignableTeam.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                           </select>
                         ) : (
-                          <button onClick={() => setEditingPm(project.id)} className="text-xs text-gray-300 hover:text-brand-300 transition-colors flex items-center gap-1">
-                            {getUserName(project.pmId)} <ChevronDown className="w-3 h-3 text-gray-600" />
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setEditingPm(project.id)} className="text-xs text-gray-300 hover:text-brand-300 transition-colors flex items-center gap-1">
+                              {getUserName(project.pmId)} <ChevronDown className="w-3 h-3 text-gray-600" />
+                            </button>
+                            {!hasProjectManager && (
+                              <button onClick={() => setInviteFor(project.id)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
+                            )}
+                          </div>
                         )}
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider">Devs</span>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-wider" title="PM can be selected here too">Devs</span>
                         {editingDevs === project.id ? (
                           <div className="flex flex-wrap gap-1 items-center">
-                            {devProfiles.map(dev => {
-                              const assigned = project.assignedDevIds.includes(dev.id);
+                            {assignableTeam.map(member => {
+                              const assigned = project.assignedDevIds.includes(member.id);
+                              const isPm = project.pmId === member.id;
                               return (
                                 <button
-                                  key={dev.id}
+                                  key={member.id}
+                                  type="button"
+                                  title={isPm ? 'Also listed as PM — can be dev too' : undefined}
                                   onClick={() => {
                                     const newIds = assigned
-                                      ? project.assignedDevIds.filter(id => id !== dev.id)
-                                      : [...project.assignedDevIds, dev.id];
+                                      ? project.assignedDevIds.filter(id => id !== member.id)
+                                      : [...project.assignedDevIds, member.id];
                                     onUpdateProject(project.id, { assignedDevIds: newIds });
                                   }}
                                   className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-all ${
                                     assigned ? 'bg-brand-500/20 border-brand-500/40 text-brand-300' : 'bg-surface-800 border-surface-700 text-gray-500 hover:text-gray-300'
                                   }`}
                                 >
-                                  {dev.name}
+                                  {member.name}
                                 </button>
                               );
                             })}
@@ -179,14 +191,21 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
                             </button>
                           </div>
                         ) : (
-                          <button onClick={() => setEditingDevs(project.id)} className="text-xs text-gray-400 hover:text-brand-300 transition-colors flex items-center gap-1">
-                            {project.assignedDevIds.length > 0
-                              ? project.assignedDevIds.map(id => getUserName(id)).join(', ')
-                              : 'None'
-                            }
-                            <ChevronDown className="w-3 h-3 text-gray-600" />
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button onClick={() => setEditingDevs(project.id)} className="text-xs text-gray-400 hover:text-brand-300 transition-colors flex items-center gap-1">
+                              {project.assignedDevIds.length > 0
+                                ? project.assignedDevIds.map(id => getUserName(id)).join(', ')
+                                : 'None'
+                              }
+                              <ChevronDown className="w-3 h-3 text-gray-600" />
+                            </button>
+                            <button onClick={() => setInviteFor(project.id)} className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Invite</button>
+                          </div>
                         )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => setShowDeleteConfirmFor(project.id)} className="text-xs text-rose-400 hover:text-white px-2 py-1 rounded bg-surface-800 border border-surface-700">Delete</button>
                       </div>
                     </div>
                   </div>
@@ -198,12 +217,53 @@ export function AdminDashboard({ projects, getSheetData, onSelectProject, onUpda
 
         {showNewProject && (
           <NewProjectModal
-            pmProfiles={pmProfiles}
+            assignableTeam={assignableTeam}
             clientProfiles={clientProfiles}
-            devProfiles={devProfiles}
             existingCount={projects.length}
             onClose={() => setShowNewProject(false)}
             onAdd={(p) => { onAddProject(p); setShowNewProject(false); }}
+          />
+        )}
+        
+        {inviteFor && (
+          <InviteModal
+            projectId={inviteFor}
+            onClose={() => setInviteFor(null)}
+            onInvite={(emails, role) => {
+              // simple invite: map demo gmail to user ids and update project assignments
+              const resolved = emails.split(',').map(e => e.trim()).filter(Boolean);
+              const updates: Partial<Project> = {};
+              const addDevIds: string[] = [];
+              for (const em of resolved) {
+                const u = resolveDemoGmailUser(em);
+                if (!u) continue;
+                if (role === 'pm') updates.pmId = u.id;
+                else if (role === 'developer') addDevIds.push(u.id);
+                else if (role === 'client') updates.clientId = u.id;
+              }
+              if (addDevIds.length > 0) {
+                const proj = projects.find(p => p.id === inviteFor);
+                const merged = Array.from(new Set([...(proj?.assignedDevIds ?? []), ...addDevIds]));
+                updates.assignedDevIds = merged;
+              }
+              onUpdateProject(inviteFor, updates);
+              setInviteFor(null);
+            }}
+          />
+        )}
+        {showDeleteConfirmFor && (
+          <DeleteConfirmModal
+            project={projects.find(p => p.id === showDeleteConfirmFor)!}
+            onClose={() => setShowDeleteConfirmFor(null)}
+            onConfirm={(id) => {
+              if (typeof onDeleteProject === 'function') {
+                onDeleteProject(id);
+              } else {
+                const ev = new CustomEvent('admin:deleteProject', { detail: id });
+                window.dispatchEvent(ev);
+              }
+              setShowDeleteConfirmFor(null);
+            }}
           />
         )}
       </div>
@@ -226,10 +286,9 @@ function StatCard({ icon: Icon, label, labelJa, value, color }: {
   );
 }
 
-function NewProjectModal({ pmProfiles, clientProfiles, devProfiles, existingCount, onClose, onAdd }: {
-  pmProfiles: { id: string; name: string }[];
+function NewProjectModal({ assignableTeam, clientProfiles, existingCount, onClose, onAdd }: {
+  assignableTeam: UserProfile[];
   clientProfiles: { id: string; name: string }[];
-  devProfiles: { id: string; name: string }[];
   existingCount: number;
   onClose: () => void;
   onAdd: (p: Project) => void;
@@ -237,9 +296,7 @@ function NewProjectModal({ pmProfiles, clientProfiles, devProfiles, existingCoun
   const [name, setName] = useState('');
   const [nameJa, setNameJa] = useState('');
   const [client, setClient] = useState('');
-  const [pmId, setPmId] = useState(pmProfiles[0]?.id ?? '');
-  const [clientId, setClientId] = useState(clientProfiles[0]?.id ?? '');
-  const [selectedDevs, setSelectedDevs] = useState<string[]>([]);
+  const defaultPmId = assignableTeam.find(u => u.role === 'pm')?.id ?? assignableTeam[0]?.id ?? '';
   const [desc, setDesc] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -251,9 +308,9 @@ function NewProjectModal({ pmProfiles, clientProfiles, devProfiles, existingCoun
       name: name.trim(),
       nameJa: nameJa.trim() || name.trim(),
       client: client.trim() || 'TBD',
-      pmId,
-      assignedDevIds: selectedDevs,
-      clientId,
+      pmId: defaultPmId,
+      assignedDevIds: [],
+      clientId: '',
       description: desc.trim(),
       descriptionJa: '',
       color: PROJECT_COLORS[colorIdx],
@@ -301,41 +358,7 @@ function NewProjectModal({ pmProfiles, clientProfiles, devProfiles, existingCoun
               className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-gray-500 mb-1.5 block">Assign PM</label>
-              <select value={pmId} onChange={e => setPmId(e.target.value)}
-                className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
-                {pmProfiles.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-gray-500 mb-1.5 block">Assign Client</label>
-              <select value={clientId} onChange={e => setClientId(e.target.value)}
-                className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40">
-                {clientProfiles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-gray-500 mb-1.5 block">Assign Developers</label>
-            <div className="flex flex-wrap gap-2">
-              {devProfiles.map(dev => {
-                const sel = selectedDevs.includes(dev.id);
-                return (
-                  <button key={dev.id} type="button"
-                    onClick={() => setSelectedDevs(sel ? selectedDevs.filter(d => d !== dev.id) : [...selectedDevs, dev.id])}
-                    className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all ${
-                      sel ? 'bg-brand-500/20 border-brand-500/40 text-brand-300' : 'bg-surface-800 border-surface-700 text-gray-500 hover:text-gray-300'
-                    }`}
-                  >
-                    {dev.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          {/* Only show name, client free text and description on create (PM/Devs assigned later via Invite). */}
 
           <button type="submit" disabled={!name.trim()}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-600 hover:bg-brand-500 disabled:opacity-50 text-white rounded-xl font-medium text-sm transition-all">
@@ -343,6 +366,71 @@ function NewProjectModal({ pmProfiles, clientProfiles, devProfiles, existingCoun
             Create Project
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function InviteModal({ projectId, onClose, onInvite }: { projectId: string; onClose: () => void; onInvite: (emails: string, role: 'pm' | 'developer' | 'client') => void }) {
+  const [emails, setEmails] = useState('');
+  const [role, setRole] = useState<'pm' | 'developer' | 'client'>('developer');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-md p-6 animate-fade-in shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Invite to project</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1 rounded"><X className="w-4 h-4" /></button>
+        </div>
+        <p className="text-sm text-gray-400 mb-3">Enter comma-separated emails to invite. For demo emails use @gmail.com addresses.</p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Emails</label>
+            <input value={emails} onChange={e => setEmails(e.target.value)} placeholder="angel@gmail.com, aj@gmail.com"
+              className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Role</label>
+            <select value={role} onChange={e => setRole(e.target.value as any)} className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200">
+              <option value="developer">Developer</option>
+              <option value="pm">Project Manager</option>
+              <option value="client">Client</option>
+            </select>
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className="text-sm px-3 py-2 rounded bg-surface-800 border border-surface-700 text-gray-300">Cancel</button>
+            <button onClick={() => onInvite(emails, role)} className="text-sm px-3 py-2 rounded bg-brand-600 text-white">Invite</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({ project, onClose, onConfirm }: { project: Project; onClose: () => void; onConfirm: (id: string) => void }) {
+  const [word, setWord] = useState('');
+  const [nameConfirm, setNameConfirm] = useState('');
+  const canConfirm = word.trim().toLowerCase() === 'delete' && nameConfirm.trim() === project.name;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-md p-6 animate-fade-in shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-white">Delete project</h3>
+          <p className="text-sm text-gray-400 mt-2">This will permanently delete the project and its data. To confirm, type <span className="font-mono text-sm">delete</span> and the project name <span className="font-medium">{project.name}</span>.</p>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Type "delete"</label>
+            <input value={word} onChange={e => setWord(e.target.value)} className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">Project name</label>
+            <input value={nameConfirm} onChange={e => setNameConfirm(e.target.value)} placeholder={project.name} className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200" />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={onClose} className="text-sm px-3 py-2 rounded bg-surface-800 border border-surface-700 text-gray-300">Cancel</button>
+            <button disabled={!canConfirm} onClick={() => onConfirm(project.id)} className={`text-sm px-3 py-2 rounded ${canConfirm ? 'bg-rose-500 text-white' : 'bg-surface-800 text-gray-400'}`}>Delete</button>
+          </div>
+        </div>
       </div>
     </div>
   );

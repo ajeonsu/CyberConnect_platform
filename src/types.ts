@@ -1,10 +1,14 @@
 export type UserRole = 'administrator' | 'pm' | 'developer' | 'client';
 
+export type AccountKind = 'team' | 'personal';
+
 export interface UserProfile {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  /** Team = company demo (role selection). Personal = isolated workspace stored in this browser. */
+  accountKind?: AccountKind;
 }
 
 export interface SheetTab {

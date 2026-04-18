@@ -1,16 +1,19 @@
 import type { SheetTab, SheetRow, UserRole } from '../types';
-import { teamMembers } from '../data';
+import { teamMembers, translate, getLocalizedCell, type Language } from '../data';
 import { X } from 'lucide-react';
 
 interface Props {
   tab: SheetTab;
   row: SheetRow;
   role: UserRole;
+  language: Language;
+  projectId: string;
   onClose: () => void;
   onUpdate: (key: string, value: string) => void;
 }
 
-export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
+export function SheetRowDetail({ tab, row, role, language, projectId, onClose, onUpdate }: Props) {
+  const seedCtx = { projectId, tabId: tab.id };
   const canEditField = (colKey: string) => {
     if (role === 'administrator' || role === 'pm') return true;
     if (role === 'developer') return tab.columns.find(c => c.key === colKey)?.editable ?? false;
@@ -30,7 +33,7 @@ export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
             </span>
           )}
           <span className="text-sm font-medium text-white truncate">
-            {tab.name}
+            {language === 'ja' ? tab.nameJa : tab.name}
           </span>
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-surface-800 shrink-0">
@@ -41,15 +44,20 @@ export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {tab.columns.map(col => {
           const value = row[col.key] ?? '';
+          const displayValue = getLocalizedCell(row, col.key, language, seedCtx);
           const editable = canEditField(col.key);
           const isGuestEditable = role === 'client' && tab.guestEditableColumns.includes(col.key);
 
           return (
             <div key={col.key}>
               <label className="text-xs text-gray-500 mb-1.5 flex items-center gap-2">
-                {col.label}
-                <span className="text-gray-600">/</span>
-                <span className="text-gray-600">{col.labelJa}</span>
+                {language === 'ja' ? col.labelJa : col.label}
+                {language === 'en' && (
+                  <>
+                    <span className="text-gray-600">/</span>
+                    <span className="text-gray-600">{col.labelJa}</span>
+                  </>
+                )}
                 {isGuestEditable && (
                   <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
                     Editable
@@ -63,7 +71,7 @@ export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
                   onChange={e => onUpdate(col.key, e.target.value)}
                   className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">{translate('Unassigned', language)}</option>
                   {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               ) : editable && (col.type === 'status' || col.type === 'select') && col.options ? (
@@ -72,7 +80,7 @@ export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
                   onChange={e => onUpdate(col.key, e.target.value)}
                   className="w-full bg-surface-800 border border-surface-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
                 >
-                  {col.options.map(o => <option key={o} value={o}>{o}</option>)}
+                  {col.options.map(o => <option key={o} value={o}>{translate(o, language)}</option>)}
                 </select>
               ) : editable && (col.type === 'longtext') ? (
                 <textarea
@@ -89,7 +97,7 @@ export function SheetRowDetail({ tab, row, role, onClose, onUpdate }: Props) {
                 />
               ) : (
                 <p className="text-sm text-gray-300 bg-surface-800 rounded-lg px-3 py-2 border border-surface-700 whitespace-pre-wrap min-h-[36px]">
-                  {value || <span className="text-gray-600 italic">—</span>}
+                  {(col.type === 'status' || col.type === 'select') ? (translate(value, language) || <span className="text-gray-600 italic">—</span>) : (displayValue || <span className="text-gray-600 italic">—</span>)}
                 </p>
               )}
             </div>

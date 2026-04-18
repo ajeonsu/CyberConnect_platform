@@ -2,8 +2,11 @@ import type { UserRole, UserProfile, SheetTab, Project } from '../types';
 import {
   ChevronLeft, ChevronRight, LogOut, FolderOpen, ArrowLeft, BarChart3,
   FileText, Server, ShieldCheck, Monitor, Puzzle, CheckSquare,
-  FlaskConical, Plug, ListTodo, GanttChart, Calendar,
+  FlaskConical, Plug, ListTodo, GanttChart, Calendar, Building2, UserRound,
+  UserCog,
 } from 'lucide-react';
+
+type WorkspaceScope = 'team' | 'personal';
 
 interface Props {
   role: UserRole;
@@ -13,6 +16,11 @@ interface Props {
   collapsed: boolean;
   onToggle: () => void;
   onTabChange: (tabId: string) => void;
+  /** Team accounts: switch between company projects and private sandbox. */
+  workspaceScope?: WorkspaceScope;
+  onWorkspaceScopeChange?: (scope: WorkspaceScope) => void;
+  /** Team accounts: reopen demo role selection without full sign-out. */
+  onSwitchRole?: () => void;
   onLogout: () => void;
   activeProject: Project | null;
   onBackToProjects: () => void;
@@ -39,7 +47,32 @@ const roleLabels: Record<UserRole, string> = {
   client: 'Guest',
 };
 
-export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onToggle, onTabChange, onLogout, activeProject, onBackToProjects, getTabRowCount, showAdminDashboard }: Props) {
+export function Sidebar({
+  role,
+  user,
+  activeTabId,
+  visibleTabs,
+  collapsed,
+  onToggle,
+  onTabChange,
+  workspaceScope,
+  onWorkspaceScopeChange,
+  onSwitchRole,
+  onLogout,
+  activeProject,
+  onBackToProjects,
+  getTabRowCount,
+  showAdminDashboard,
+}: Props) {
+  const showWorkspaceSwitch = user.accountKind === 'team' && workspaceScope !== undefined && onWorkspaceScopeChange;
+
+  const roleLine =
+    user.accountKind === 'personal'
+      ? 'Personal space'
+      : showWorkspaceSwitch && workspaceScope === 'personal'
+        ? 'Personal workspace'
+        : roleLabels[role];
+
   return (
     <div className={`${collapsed ? 'w-16' : 'w-60'} bg-surface-900 border-r border-surface-700 flex flex-col transition-all duration-200 shrink-0`}>
       <div className="p-4 flex items-center gap-3 border-b border-surface-700">
@@ -52,7 +85,7 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
             <p className="text-gray-500 text-xs truncate">Platform</p>
           </div>
         )}
-        <button onClick={onToggle} className="ml-auto text-gray-500 hover:text-gray-300 transition-colors shrink-0">
+        <button type="button" onClick={onToggle} className="ml-auto text-gray-500 hover:text-gray-300 transition-colors shrink-0">
           {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
@@ -65,20 +98,75 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-gray-300 text-xs font-medium truncate">{user.name}</p>
-              <p className="text-gray-600 text-[10px] truncate">{roleLabels[role]}</p>
+              <p className="text-gray-600 text-[10px] truncate">{roleLine}</p>
             </div>
-            {role === 'client' && (
+            {role === 'client' && workspaceScope !== 'personal' && (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
                 View Only
               </span>
             )}
           </div>
+
+          {showWorkspaceSwitch && (
+            <div className="mt-2.5 flex rounded-lg bg-surface-800 p-0.5 border border-surface-700">
+              <button
+                type="button"
+                onClick={() => onWorkspaceScopeChange!('team')}
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[10px] font-medium transition-all ${
+                  workspaceScope === 'team'
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <Building2 className="w-3 h-3 shrink-0" />
+                Team
+              </button>
+              <button
+                type="button"
+                onClick={() => onWorkspaceScopeChange!('personal')}
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-[10px] font-medium transition-all ${
+                  workspaceScope === 'personal'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <UserRound className="w-3 h-3 shrink-0" />
+                Personal
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {collapsed && showWorkspaceSwitch && (
+        <div className="px-2 pt-1 flex flex-col gap-1 border-b border-surface-700 pb-2">
+          <button
+            type="button"
+            title="Team workspace"
+            onClick={() => onWorkspaceScopeChange!('team')}
+            className={`flex items-center justify-center p-2 rounded-lg border transition-colors ${
+              workspaceScope === 'team' ? 'bg-brand-600 border-brand-500 text-white' : 'border-surface-700 text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            title="Personal workspace"
+            onClick={() => onWorkspaceScopeChange!('personal')}
+            className={`flex items-center justify-center p-2 rounded-lg border transition-colors ${
+              workspaceScope === 'personal' ? 'bg-emerald-600 border-emerald-500 text-white' : 'border-surface-700 text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <UserRound className="w-4 h-4" />
+          </button>
         </div>
       )}
 
       {activeProject && !collapsed && (
         <div className="px-2 pt-2">
           <button
+            type="button"
             onClick={onBackToProjects}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all bg-surface-800 border border-surface-700 hover:border-brand-500/30 group"
           >
@@ -97,6 +185,7 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
       {activeProject && collapsed && (
         <div className="px-2 pt-2">
           <button
+            type="button"
             onClick={onBackToProjects}
             className={`w-full flex items-center justify-center p-2.5 rounded-lg bg-gradient-to-br ${activeProject.color} hover:opacity-80 transition-opacity`}
             title={activeProject.name}
@@ -126,6 +215,7 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
             return (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => onTabChange(tab.id)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all ${
                   isActive
@@ -142,9 +232,11 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
                       <div className="text-[10px] text-gray-600 truncate">{tab.nameJa}</div>
                     </div>
                     {count !== null && count > 0 && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                        isActive ? 'bg-brand-500/20 text-brand-300' : 'bg-surface-800 text-gray-500'
-                      }`}>
+                      <span
+                        className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                          isActive ? 'bg-brand-500/20 text-brand-300' : 'bg-surface-800 text-gray-500'
+                        }`}
+                      >
                         {count}
                       </span>
                     )}
@@ -164,14 +256,31 @@ export function Sidebar({ role, user, activeTabId, visibleTabs, collapsed, onTog
         ) : null}
       </nav>
 
-      <div className="p-2 border-t border-surface-700">
+      <div className="p-2 border-t border-surface-700 space-y-0.5">
+        {onSwitchRole && (
+          <button
+            type="button"
+            onClick={onSwitchRole}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:text-brand-300 hover:bg-brand-500/5 transition-colors"
+            title={collapsed ? 'Switch role' : undefined}
+          >
+            <UserCog className="w-4 h-4 shrink-0" />
+            {!collapsed && (
+              <span className="text-xs text-left leading-tight">
+                Switch role
+                <span className="block text-[10px] text-gray-600 font-normal">ロールを変更</span>
+              </span>
+            )}
+          </button>
+        )}
         <button
+          type="button"
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
           title={collapsed ? 'Logout' : undefined}
         >
           <LogOut className="w-4 h-4 shrink-0" />
-          {!collapsed && <span className="text-xs">Switch Role</span>}
+          {!collapsed && <span className="text-xs">Logout</span>}
         </button>
       </div>
     </div>

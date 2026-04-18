@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import type { UserRole, SheetTab, SheetRow } from '../types';
-import { teamMembers } from '../data';
+import { teamMembers, translate, getLocalizedCell, type Language } from '../data';
 import { ChevronUp, ChevronDown, Trash2, Plus } from 'lucide-react';
 
 interface Props {
   tab: SheetTab;
   rows: SheetRow[];
   role: UserRole;
+  language: Language;
+  /** Used to resolve `${key}Ja` from seed data when the live row lost mirror fields. */
+  projectId: string;
   onSelectRow: (row: SheetRow) => void;
   onUpdateRow: (id: string, key: string, value: string) => void;
   onDeleteRow: (id: string) => void;
@@ -30,11 +33,13 @@ const statusColors: Record<string, { text: string; bg: string }> = {
   'v3': { text: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' },
 };
 
-export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDeleteRow, onAddRow, selectedRowId }: Props) {
+export function GenericSheet({ tab, rows, role, language, projectId, onSelectRow, onUpdateRow, onDeleteRow, onAddRow, selectedRowId }: Props) {
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [editingCell, setEditingCell] = useState<{ id: string; key: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  const seedCtx = { projectId, tabId: tab.id };
 
   const handleSort = (key: string) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -43,7 +48,9 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
 
   const sorted = [...rows].sort((a, b) => {
     if (!sortKey) return 0;
-    const cmp = (a[sortKey] ?? '').localeCompare(b[sortKey] ?? '');
+    const av = getLocalizedCell(a, sortKey, language, seedCtx) || (a[sortKey] ?? '');
+    const bv = getLocalizedCell(b, sortKey, language, seedCtx) || (b[sortKey] ?? '');
+    const cmp = av.localeCompare(bv, language === 'ja' ? 'ja' : 'en');
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
@@ -102,8 +109,12 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
                 >
                   <div className="flex items-center gap-1.5">
                     <div>
-                      <span className="text-xs font-medium text-gray-300 group-hover:text-white transition-colors">{c.label}</span>
-                      <span className="block text-[10px] text-gray-600">{c.labelJa}</span>
+                      <span className="text-xs font-medium text-gray-300 group-hover:text-white transition-colors">
+                        {language === 'ja' ? c.labelJa : c.label}
+                      </span>
+                      {language === 'en' && (
+                        <span className="block text-[10px] text-gray-600">{c.labelJa}</span>
+                      )}
                     </div>
                     {sortKey === c.key && (
                       sortDir === 'asc'
@@ -130,6 +141,7 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
                 </td>
                 {tab.columns.map(c => {
                   const value = row[c.key] ?? '';
+                  const displayValue = getLocalizedCell(row, c.key, language, seedCtx);
                   const isEditing = editingCell?.id === row.id && editingCell?.key === c.key;
                   const editable = canEditCell(c.key);
                   const isGuestEditable = role === 'client' && tab.guestEditableColumns.includes(c.key);
@@ -151,7 +163,7 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
                             className="w-full bg-surface-800 border border-brand-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
                             onClick={e => e.stopPropagation()}
                           >
-                            <option value="">Unassigned</option>
+                            <option value="">{translate('Unassigned', language)}</option>
                             {teamMembers.map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         ) : c.type === 'status' || c.type === 'select' ? (
@@ -163,7 +175,7 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
                             className="w-full bg-surface-800 border border-brand-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
                             onClick={e => e.stopPropagation()}
                           >
-                            {(c.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+                            {(c.options ?? []).map(o => <option key={o} value={o}>{translate(o, language)}</option>)}
                           </select>
                         ) : (
                           <input
@@ -178,32 +190,32 @@ export function GenericSheet({ tab, rows, role, onSelectRow, onUpdateRow, onDele
                         )
                       ) : c.type === 'code' ? (
                         <span className="font-mono text-xs bg-surface-800 px-2 py-1 rounded text-brand-300 border border-surface-700">
-                          {value}
+                          {displayValue}
                         </span>
                       ) : c.type === 'status' || c.type === 'select' ? (
                         value ? (
                           <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full border ${statusColors[value]?.bg ?? 'bg-gray-500/10 border-gray-500/20'} ${statusColors[value]?.text ?? 'text-gray-400'}`}>
-                            {value}
+                            {translate(value, language)}
                           </span>
                         ) : <span className="text-gray-600">—</span>
                       ) : c.type === 'assignee' ? (
-                        value ? (
+                        displayValue ? (
                           <span className="inline-flex items-center gap-1.5 text-sm">
                             <span className="w-5 h-5 rounded-full bg-brand-600 flex items-center justify-center text-[10px] text-white font-medium shrink-0">
-                              {value.charAt(0)}
+                              {displayValue.charAt(0)}
                             </span>
-                            <span className="text-gray-300">{value}</span>
+                            <span className="text-gray-300">{displayValue}</span>
                           </span>
-                        ) : <span className="text-gray-600 text-xs">Unassigned</span>
+                        ) : <span className="text-gray-600 text-xs">{translate('Unassigned', language)}</span>
                       ) : c.type === 'date' ? (
-                        <span className="text-gray-400 text-xs">{value || '—'}</span>
+                        <span className="text-gray-400 text-xs">{displayValue || '—'}</span>
                       ) : c.type === 'number' ? (
-                        <span className="text-gray-300 font-mono text-xs">{value || '—'}</span>
+                        <span className="text-gray-300 font-mono text-xs">{displayValue || '—'}</span>
                       ) : c.type === 'longtext' ? (
-                        <span className="text-gray-300 text-xs leading-relaxed line-clamp-2">{value || <span className="text-gray-600">—</span>}</span>
+                        <span className="text-gray-300 text-xs leading-relaxed line-clamp-2">{displayValue || <span className="text-gray-600">—</span>}</span>
                       ) : (
                         <span className={`text-gray-300 truncate block ${isGuestEditable ? 'cursor-text' : ''}`}>
-                          {value || <span className="text-gray-600">—</span>}
+                          {displayValue || <span className="text-gray-600">—</span>}
                         </span>
                       )}
                     </td>
